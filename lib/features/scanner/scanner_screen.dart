@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:camera/camera.dart';
 import '../../core/theme.dart';
 import '../../core/state/app_state_provider.dart';
 import '../../core/services/permission_service.dart';
 import '../../core/services/document_scanner_service.dart';
 import 'preview_screen.dart';
-import 'image_editor_screen.dart';
 
 class ScannerScreen extends StatefulWidget {
   const ScannerScreen({super.key});
@@ -20,122 +18,69 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
   bool _isContinuousMode = false;
   bool _isScanning = false;
 
-  // Camera state
-  CameraController? _cameraController;
-  bool _isCameraInitialized = false;
-  bool _isCameraPermissionGranted = false;
-  bool _isCameraError = false;
-  String _cameraErrorMessage = '';
-  FlashMode _currentFlashMode = FlashMode.off;
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Defer camera init to after first frame so we have context
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initializeCamera();
-    });
+  }
+
+  void _switchToSingleMode(BuildContext context) {
+    final state = AppStateProvider.of(context);
+    
+    // If switching to single mode and there are items in queue, ask user
+    if (_isContinuousMode && state.scanQueue.isNotEmpty) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: AppTheme.surfaceDark,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text(
+            'Switch to Single Scan?',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+          content: Text(
+            'You have ${state.scanQueue.length} page${state.scanQueue.length > 1 ? 's' : ''} in the queue. Switching to Single Scan mode will keep them. Continue?',
+            style: const TextStyle(color: AppTheme.textSecondary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                setState(() => _isContinuousMode = false);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
+              child: const Text('Switch Mode', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+    } else {
+      setState(() => _isContinuousMode = false);
+    }
+  }
+
+  void _switchToContinuousMode(BuildContext context) {
+    setState(() => _isContinuousMode = true);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _cameraController?.dispose();
     super.dispose();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Handle app lifecycle for camera resource management
-    final CameraController? cameraController = _cameraController;
-    
-    if (cameraController == null || !cameraController.value.isInitialized) {
-      return;
-    }
-
-    if (state == AppLifecycleState.inactive) {
-      cameraController.dispose();
-      _isCameraInitialized = false;
-    } else if (state == AppLifecycleState.resumed) {
-      _initializeCamera();
-    }
-  }
-
-  Future<void> _initializeCamera() async {
-    // Request camera permission
-    if (!mounted) return;
-    final hasPermission = await PermissionService.requestCamera(context);
-
-    if (!mounted) return;
-    setState(() {
-      _isCameraPermissionGranted = hasPermission;
-    });
-
-    if (!hasPermission) return;
-
-    try {
-      final cameras = await availableCameras();
-      if (cameras.isEmpty) {
-        setState(() {
-          _isCameraError = true;
-          _cameraErrorMessage = 'No cameras available on this device.';
-        });
-        return;
-      }
-
-      // Prefer back camera
-      final backCamera = cameras.firstWhere(
-        (c) => c.lensDirection == CameraLensDirection.back,
-        orElse: () => cameras.first,
-      );
-
-      _cameraController = CameraController(
-        backCamera,
-        ResolutionPreset.high,
-        enableAudio: false,
-        imageFormatGroup: ImageFormatGroup.jpeg,
-      );
-
-      await _cameraController!.initialize();
-
-      if (!mounted) return;
-      setState(() {
-        _isCameraInitialized = true;
-        _isCameraError = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _isCameraError = true;
-        _cameraErrorMessage = 'Camera initialization failed. You can still import from gallery.';
-      });
-    }
-  }
-
-  Future<void> _toggleFlash() async {
-    if (_cameraController == null || !_cameraController!.value.isInitialized) return;
-
-    try {
-      final newMode = _currentFlashMode == FlashMode.off ? FlashMode.torch : FlashMode.off;
-      await _cameraController!.setFlashMode(newMode);
-      setState(() {
-        _currentFlashMode = newMode;
-      });
-    } catch (e) {
-      // Flash not supported on this device — ignore silently
-    }
-  }
-
   void _capturePage(BuildContext context) async {
-    if (_isScanning || _cameraController == null || !_cameraController!.value.isInitialized) return;
+    if (_isScanning) return;
 
     final state = AppStateProvider.of(context);
 
-    // Free tier scanner limit check (10 pages in continuous mode)
-    if (!state.isProUnlocked && state.scanQueue.length >= 10 && _isContinuousMode) {
-      _showProModal(context);
-      return;
+    // In Single Scan mode, clear previous queue before scanning
+    if (!_isContinuousMode && state.scanQueue.isNotEmpty) {
+      state.clearScanQueue();
     }
 
     setState(() {
@@ -143,7 +88,8 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
     });
 
     try {
-      final XFile photo = await _cameraController!.takePicture();
+      // Use ML Kit's built-in scanner with automatic capture and edge detection
+      final scannedPaths = await DocumentScannerService.scanDocumentWithMLKit();
 
       if (!mounted) return;
 
@@ -151,148 +97,253 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
         _isScanning = false;
       });
 
-      // Navigate to image editor for manual adjustments
-      _openImageEditor(context, photo.path);
+      if (scannedPaths.isEmpty) {
+        // User cancelled - don't show error message
+        return;
+      }
+
+      // Add all scanned pages to queue
+      for (var path in scannedPaths) {
+        state.addPageToScanQueue(path);
+      }
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${scannedPaths.length} page${scannedPaths.length > 1 ? 's' : ''} scanned successfully!'),
+          duration: const Duration(milliseconds: 800),
+          backgroundColor: AppTheme.success,
+        ),
+      );
+
+      if (!_isContinuousMode) {
+        // Single Scan Mode: navigate to Preview immediately
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (!mounted) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const PreviewScreen()),
+        );
+      }
+      // In continuous mode, stay on scanner screen and show "Done" button
+      // User can choose to scan another page or finish
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _isScanning = false;
       });
+      
+      // User-friendly error message
+      String errorMessage = 'Unable to scan document';
+      if (e.toString().contains('permission')) {
+        errorMessage = 'Camera permission is required to scan documents';
+      } else if (e.toString().contains('not available')) {
+        errorMessage = 'ML Kit scanner is not available on this device';
+      } else if (e.toString().contains('cancel')) {
+        // User cancelled, don't show error
+        return;
+      }
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Capture failed: ${e.toString()}'),
+          content: Text(errorMessage),
           backgroundColor: AppTheme.danger,
+          action: SnackBarAction(
+            label: 'Use Gallery',
+            textColor: Colors.white,
+            onPressed: () => _pickFromGallery(context),
+          ),
         ),
       );
     }
   }
 
-  /// Open image editor for manual crop and rotate
-  void _openImageEditor(BuildContext context, String imagePath) async {
-    // Detect document edges before opening editor
-    debugPrint('ScannerScreen: Detecting document edges...');
-    final corners = await DocumentScannerService.detectDocumentEdges(imagePath);
-    
-    if (!mounted) return;
-
-    // Navigate to editor and wait for result
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ImageEditorScreen(
-          imagePath: imagePath,
-          detectedCorners: corners, // Pass detected corners
-          onSave: (editedPath) async {
-            final state = AppStateProvider.of(context);
-
-            // Add the edited image directly to queue (no enhancement)
-            state.addPageToScanQueue(editedPath);
-
-            if (!mounted) return;
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Page ${state.scanQueue.length} saved!'),
-                duration: const Duration(seconds: 1),
-                backgroundColor: AppTheme.primaryLight,
-              ),
-            );
-
-            // Close editor and return to scanner
-            Navigator.pop(context);
-
-            if (!_isContinuousMode) {
-              // Single Scan Mode: navigate to Preview (use push, not pushReplacement)
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const PreviewScreen()),
-              );
-            }
-            // In continuous mode, just stay on scanner to add more pages
-          },
-        ),
-      ),
-    );
-    
-    // Reinitialize camera when returning from editor
-    if (mounted && !_isCameraInitialized) {
-      debugPrint('ScannerScreen: Reinitializing camera after editor');
-      await _initializeCamera();
-    }
-  }
-
   void _pickFromGallery(BuildContext context) async {
+    debugPrint('Scanner: Gallery import started');
+    
     // Request photo permission first
     if (!mounted) return;
     final hasPermission = await PermissionService.requestPhotos(context);
-    if (!hasPermission) return;
+    if (!hasPermission) {
+      debugPrint('Scanner: Photo permission denied');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Photo library access is required to import images'),
+          backgroundColor: AppTheme.danger,
+        ),
+      );
+      return;
+    }
 
+    debugPrint('Scanner: Photo permission granted, opening picker');
     final state = AppStateProvider.of(context);
     final picker = ImagePicker();
 
     try {
-      final List<XFile> images = await picker.pickMultiImage();
-      if (images.isNotEmpty) {
-        for (var image in images) {
-          // Add image directly to queue (no enhancement)
-          state.addPageToScanQueue(image.path);
-        }
-        if (mounted) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const PreviewScreen()),
-          );
-        }
+      // Let user select images from gallery
+      debugPrint('Scanner: Calling pickMultiImage()');
+      final List<XFile>? images = await picker.pickMultiImage(
+        imageQuality: 100,
+      );
+      
+      debugPrint('Scanner: pickMultiImage returned: ${images?.length ?? 0} images');
+      
+      if (images == null || images.isEmpty) {
+        debugPrint('Scanner: No images selected, user cancelled');
+        return;
       }
-    } catch (e) {
+
+      debugPrint('Scanner: User selected ${images.length} images');
+
+      if (!mounted) return;
+
+      // In Single Scan mode, clear previous queue before importing
+      if (!_isContinuousMode && state.scanQueue.isNotEmpty) {
+        debugPrint('Scanner: Clearing previous scan queue');
+        state.clearScanQueue();
+      }
+
+      // Add all images directly to queue without processing
+      for (var image in images) {
+        state.addPageToScanQueue(image.path);
+      }
+
+      debugPrint('Scanner: Added ${images.length} images to queue');
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Gallery pick failed: ${e.toString()}'),
+            content: Text('${images.length} image${images.length > 1 ? 's' : ''} imported successfully!'),
+            duration: const Duration(milliseconds: 1000),
+            backgroundColor: AppTheme.success,
+          ),
+        );
+        
+        // Navigate to preview
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (!mounted) return;
+        
+        debugPrint('Scanner: Navigating to preview screen');
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const PreviewScreen()),
+        );
+      }
+    } catch (e, stackTrace) {
+      debugPrint('Scanner: Gallery import EXCEPTION: $e');
+      debugPrint('Scanner: Stack trace: $stackTrace');
+      
+      if (mounted) {
+        String errorMessage = 'Unable to import images';
+        
+        final errorStr = e.toString().toLowerCase();
+        if (errorStr.contains('permission')) {
+          errorMessage = 'Photo library access was denied';
+        } else if (errorStr.contains('cancel')) {
+          debugPrint('Scanner: User cancelled image selection');
+          return; // User cancelled, don't show error
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
             backgroundColor: AppTheme.danger,
+            duration: const Duration(seconds: 4),
           ),
         );
       }
     }
   }
 
-  void _showProModal(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.surfaceDark,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            const Icon(LucideIcons.crown, color: AppTheme.warning),
-            const SizedBox(width: 8),
-            const Text('Unlock Pro Scan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-          ],
+  void _pickFromGalleryEnhanced(BuildContext context) async {
+    debugPrint('Scanner: Enhanced gallery import started');
+    
+    // Request photo permission first
+    if (!mounted) return;
+    final hasPermission = await PermissionService.requestPhotos(context);
+    if (!hasPermission) {
+      debugPrint('Scanner: Photo permission denied');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Photo library access is required to import images'),
+          backgroundColor: AppTheme.danger,
         ),
-        content: const Text(
-          'Continuous scan mode is capped at 10 pages on the free tier. Unlock Pro for unlimited multi-page document scanning!',
-          style: TextStyle(color: AppTheme.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Maybe Later'),
+      );
+      return;
+    }
+
+    final state = AppStateProvider.of(context);
+
+    // In Single Scan mode, clear previous queue before importing
+    if (!_isContinuousMode && state.scanQueue.isNotEmpty) {
+      state.clearScanQueue();
+    }
+
+    try {
+      // Use ML Kit scanner with gallery import enabled
+      debugPrint('Scanner: Opening ML Kit with gallery mode');
+      final scannedPaths = await DocumentScannerService.scanDocumentFromGallery();
+      
+      if (scannedPaths.isEmpty) {
+        debugPrint('Scanner: No images scanned, user cancelled');
+        return;
+      }
+
+      debugPrint('Scanner: ML Kit processed ${scannedPaths.length} images');
+
+      // Add all scanned images to queue
+      for (var path in scannedPaths) {
+        state.addPageToScanQueue(path);
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${scannedPaths.length} image${scannedPaths.length > 1 ? 's' : ''} enhanced and imported!'),
+            duration: const Duration(milliseconds: 1000),
+            backgroundColor: AppTheme.success,
           ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              final state = AppStateProvider.of(context);
-              state.toggleProStatus();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Pro Tier Unlocked!'), backgroundColor: AppTheme.success),
-              );
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
-            child: const Text('Go Pro (\$2.99)', style: TextStyle(color: Colors.white)),
+        );
+        
+        // Navigate to preview
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (!mounted) return;
+        
+        debugPrint('Scanner: Navigating to preview screen');
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const PreviewScreen()),
+        );
+      }
+    } catch (e, stackTrace) {
+      debugPrint('Scanner: Enhanced import EXCEPTION: $e');
+      debugPrint('Scanner: Stack trace: $stackTrace');
+      
+      if (mounted) {
+        String errorMessage = 'Unable to import images';
+        
+        final errorStr = e.toString().toLowerCase();
+        if (errorStr.contains('permission')) {
+          errorMessage = 'Photo library access was denied';
+        } else if (errorStr.contains('cancel')) {
+          debugPrint('Scanner: User cancelled');
+          return;
+        } else if (errorStr.contains('not available')) {
+          errorMessage = 'ML Kit scanner is not available on this device';
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: AppTheme.danger,
+            duration: const Duration(seconds: 4),
           ),
-        ],
-      ),
-    );
+        );
+      }
+    }
   }
 
   @override
@@ -301,331 +352,309 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
     final queueCount = state.scanQueue.length;
 
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          // 1. Camera Viewport or Fallback
-          Positioned.fill(
-            child: _buildCameraView(),
-          ),
-
-          // 2. Camera Controls Header
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 10,
-            left: 16,
-            right: 16,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                IconButton(
-                  icon: const Icon(LucideIcons.x, color: Colors.white, size: 24),
-                  onPressed: () => Navigator.pop(context),
-                ),
-                Row(
-                  children: [
-                    if (_isCameraInitialized)
-                      IconButton(
-                        icon: Icon(
-                          _currentFlashMode == FlashMode.off ? LucideIcons.zapOff : LucideIcons.zap,
-                          color: _currentFlashMode == FlashMode.off ? Colors.white : AppTheme.warning,
-                          size: 22,
-                        ),
-                        onPressed: _toggleFlash,
+      backgroundColor: const Color(0xFF0F0F13),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(LucideIcons.x, color: Colors.white, size: 24),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  const Expanded(
+                    child: Text(
+                      'Scan Document',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
                       ),
-                  ],
-                ),
-              ],
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(width: 48), // Balance the back button
+                ],
+              ),
             ),
-          ),
 
-          // 3. Scan Mode Toggle Footer Slider & Shutter Controls
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              padding: const EdgeInsets.only(top: 20, bottom: 30),
+            // Main Content
+            Expanded(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 16.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const SizedBox(height: 20),
+                      // Scanner Icon
+                      Container(
+                        padding: const EdgeInsets.all(32),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppTheme.primaryGlow,
+                          border: Border.all(color: AppTheme.primary, width: 2),
+                        ),
+                        child: Icon(
+                          LucideIcons.scan,
+                          color: AppTheme.primary,
+                          size: 64,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      
+                      // Title
+                      Text(
+                        _isContinuousMode ? 'Continuous Scan Mode' : 'Ready to Scan',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      
+                      // Description
+                      Text(
+                        _isContinuousMode 
+                          ? 'After each scan, you can add more pages or tap "Done Scanning" to finish.'
+                          : 'Tap the scan button to automatically capture and crop your document',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 13,
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 32),
+                      
+                      // Scan Button or Done Button
+                      if (!_isContinuousMode || queueCount == 0) ...[
+                        // Show Start Scanning button
+                        ElevatedButton.icon(
+                          onPressed: _isScanning ? null : () => _capturePage(context),
+                          icon: _isScanning
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  ),
+                                )
+                              : const Icon(LucideIcons.camera, size: 20),
+                          label: Text(
+                            _isScanning ? 'Scanning...' : 'Start Scanning',
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                        ),
+                      ] else ...[
+                        // In continuous mode with scans, show Done button prominently
+                        Column(
+                          children: [
+                            ElevatedButton.icon(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const PreviewScreen(),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(LucideIcons.check, size: 20),
+                              label: const Text(
+                                'Done Scanning',
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.success,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            TextButton.icon(
+                              onPressed: _isScanning ? null : () => _capturePage(context),
+                              icon: _isScanning
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primary),
+                                      ),
+                                    )
+                                  : const Icon(LucideIcons.camera, size: 18),
+                              label: Text(
+                                _isScanning ? 'Scanning...' : 'Scan Another Page',
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                              style: TextButton.styleFrom(
+                                foregroundColor: AppTheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      
+                      const SizedBox(height: 12),
+                      
+                      // Gallery Import Button
+                      TextButton.icon(
+                        onPressed: () => _pickFromGallery(context),
+                        icon: const Icon(LucideIcons.image, size: 18),
+                        label: const Text('Import from Gallery'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppTheme.textSecondary,
+                        ),
+                      ),
+                      
+                      if (queueCount > 0) ...[
+                        const SizedBox(height: 20),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: AppTheme.surfaceDark,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppTheme.primary),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: const BoxDecoration(
+                                  color: AppTheme.primary,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Text(
+                                  '$queueCount',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                '$queueCount page${queueCount > 1 ? 's' : ''} scanned',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              TextButton(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => const PreviewScreen(),
+                                    ),
+                                  );
+                                },
+                                child: const Text('View'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Mode Toggle Footer
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.transparent, Colors.black.withOpacity(0.95)],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
+                color: AppTheme.surfaceDark,
+                border: Border(
+                  top: BorderSide(color: AppTheme.borderDark),
                 ),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Mode Slider Toggle
+                  const Text(
+                    'Scan Mode',
+                    style: TextStyle(
+                      color: AppTheme.textMuted,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       GestureDetector(
-                        onTap: () => setState(() => _isContinuousMode = false),
+                        onTap: () => _switchToSingleMode(context),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
                           decoration: BoxDecoration(
-                            color: !_isContinuousMode ? AppTheme.primaryGlow : Colors.transparent,
-                            borderRadius: BorderRadius.circular(15),
+                            color: !_isContinuousMode ? AppTheme.primary : Colors.transparent,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: !_isContinuousMode ? AppTheme.primary : AppTheme.borderDark,
+                            ),
                           ),
                           child: Text(
                             'Single Scan',
                             style: TextStyle(
                               color: !_isContinuousMode ? Colors.white : AppTheme.textSecondary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 20),
+                      const SizedBox(width: 12),
                       GestureDetector(
-                        onTap: () {
-                          if (!state.isProUnlocked && queueCount >= 10) {
-                            _showProModal(context);
-                            return;
-                          }
-                          setState(() => _isContinuousMode = true);
-                        },
+                        onTap: () => _switchToContinuousMode(context),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
                           decoration: BoxDecoration(
-                            color: _isContinuousMode ? AppTheme.primaryGlow : Colors.transparent,
-                            borderRadius: BorderRadius.circular(15),
+                            color: _isContinuousMode ? AppTheme.primary : Colors.transparent,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: _isContinuousMode ? AppTheme.primary : AppTheme.borderDark,
+                            ),
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                'Continuous',
-                                style: TextStyle(
-                                  color: _isContinuousMode ? Colors.white : AppTheme.textSecondary,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              if (!state.isProUnlocked) ...[
-                                const SizedBox(width: 4),
-                                const Icon(LucideIcons.lock, color: AppTheme.warning, size: 10),
-                              ]
-                            ],
+                          child: Text(
+                            'Continuous',
+                            style: TextStyle(
+                              color: _isContinuousMode ? Colors.white : AppTheme.textSecondary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
-
-                  // Capture Panel
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // Gallery Button
-                        IconButton(
-                          icon: const Icon(LucideIcons.image, color: Colors.white, size: 28),
-                          onPressed: () => _pickFromGallery(context),
-                        ),
-                        
-                        // Shutter Button
-                        GestureDetector(
-                          onTap: _isCameraInitialized ? () => _capturePage(context) : null,
-                          child: Container(
-                            width: 76,
-                            height: 76,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: _isCameraInitialized ? Colors.white : Colors.white38,
-                                width: 4,
-                              ),
-                            ),
-                            padding: const EdgeInsets.all(4),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: _isScanning
-                                    ? AppTheme.success
-                                    : (_isCameraInitialized ? Colors.white : Colors.white38),
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        // Queue Preview/Done Checkmark
-                        GestureDetector(
-                          onTap: () {
-                            if (queueCount > 0) {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (context) => const PreviewScreen()),
-                              );
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Capture at least 1 page first.')),
-                              );
-                            }
-                          },
-                          child: Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: queueCount > 0 ? AppTheme.primary : AppTheme.surfaceDark,
-                              border: Border.all(color: AppTheme.borderDark),
-                            ),
-                            child: Center(
-                              child: queueCount > 0
-                                  ? Stack(
-                                      alignment: Alignment.center,
-                                      children: [
-                                        const Icon(LucideIcons.check, color: Colors.white, size: 20),
-                                        Positioned(
-                                          top: 2,
-                                          right: 2,
-                                          child: CircleAvatar(
-                                            radius: 8,
-                                            backgroundColor: Colors.white,
-                                            child: Text(
-                                              '$queueCount',
-                                              style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.black),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    )
-                                  : const Icon(LucideIcons.check, color: AppTheme.textMuted, size: 20),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 ],
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Builds the camera preview area, or a fallback card if camera is unavailable.
-  Widget _buildCameraView() {
-    // Camera permission not granted
-    if (!_isCameraPermissionGranted) {
-      return _buildFallbackCard(
-        icon: LucideIcons.cameraOff,
-        title: 'Camera Permission Required',
-        subtitle: 'Tap below to grant camera access, or import from gallery.',
-        actionLabel: 'Grant Camera Access',
-        onAction: () => _initializeCamera(),
-      );
-    }
-
-    // Camera error (e.g., emulator with no camera)
-    if (_isCameraError) {
-      return _buildFallbackCard(
-        icon: LucideIcons.alertTriangle,
-        title: 'Camera Unavailable',
-        subtitle: _cameraErrorMessage,
-        actionLabel: 'Import from Gallery',
-        onAction: () => _pickFromGallery(context),
-      );
-    }
-
-    // Camera still initializing
-    if (!_isCameraInitialized || _cameraController == null) {
-      return Container(
-        color: const Color(0xFF0F0F13),
-        child: const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(color: AppTheme.primaryLight),
-              SizedBox(height: 16),
-              Text(
-                'Initializing Camera...',
-                style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    // Live camera preview
-    return ClipRect(
-      child: OverflowBox(
-        alignment: Alignment.center,
-        child: FittedBox(
-          fit: BoxFit.cover,
-          child: SizedBox(
-            width: _cameraController!.value.previewSize!.height,
-            height: _cameraController!.value.previewSize!.width,
-            child: CameraPreview(_cameraController!),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Builds a styled fallback card for when the camera is not available.
-  Widget _buildFallbackCard({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required String actionLabel,
-    required VoidCallback onAction,
-  }) {
-    return Container(
-      color: const Color(0xFF0F0F13),
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppTheme.primaryGlow,
-                  border: Border.all(color: AppTheme.borderDark, width: 1),
-                ),
-                child: Icon(icon, color: AppTheme.primaryLight, size: 48),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                subtitle,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
-                onPressed: onAction,
-                icon: Icon(icon, size: 18),
-                label: Text(actionLabel),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-              ),
-            ],
-          ),
+          ],
         ),
       ),
     );

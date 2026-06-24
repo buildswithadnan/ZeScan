@@ -184,47 +184,8 @@ class _ToolkitScreenState extends State<ToolkitScreen> {
     );
   }
 
-  void _showProUnlockDialog() {
-    final state = AppStateProvider.of(context);
-    final isDark = state.isDarkMode;
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: isDark ? AppTheme.surfaceDark : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            const Icon(LucideIcons.crown, color: AppTheme.warning),
-            const SizedBox(width: 8),
-            Text('Go Pro Feature', style: TextStyle(color: AppTheme.getTextPrimary(isDark), fontWeight: FontWeight.bold, fontSize: 16)),
-          ],
-        ),
-        content: Text(
-          'Managing, deleting, and rotating pages of existing PDFs requires the Pro Lifetime Unlock (\$2.99). Upgrade now!',
-          style: TextStyle(color: AppTheme.getTextSecondary(isDark), fontSize: 13),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              final state = AppStateProvider.of(context);
-              state.toggleProStatus();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Pro Tier Unlocked!'), backgroundColor: AppTheme.success),
-              );
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
-            child: const Text('Unlock Pro', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
+  // Pro features removed - all features are now free
+  // Payment will be added in the future
 
   // 2. MERGE PDF UTILITY
   Widget _buildMergeTool(AppState state) {
@@ -665,7 +626,7 @@ class _ToolkitScreenState extends State<ToolkitScreen> {
     );
   }
 
-  // 5. MANAGE PAGES UTILITY (PRO)
+  // 5. MANAGE PAGES UTILITY
   Widget _buildManageTool(AppState state) {
     final docs = state.documents;
     Document? selectedDoc;

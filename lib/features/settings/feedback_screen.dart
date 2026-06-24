@@ -3,9 +3,11 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io';
+import 'dart:async';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../core/theme.dart';
+import '../../core/utils/api_error_handler.dart';
 
 class FeedbackScreen extends StatefulWidget {
   final String type; // 'feedback', 'bug_report', or 'feature_request'
@@ -128,8 +130,10 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       _isSubmitting = true;
     });
 
+    http.Response? response;
+
     try {
-      final response = await http.post(
+      response = await http.post(
         Uri.parse('https://zescan.zeppelinlabs.digital/api/feedback'),
         headers: {
           'Content-Type': 'application/json',
@@ -142,35 +146,49 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
           'appVersion': _appVersion,
           'deviceInfo': _deviceInfo,
         }),
+      ).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw TimeoutException('Request timed out after 30 seconds');
+        },
       );
 
       if (!mounted) return;
 
-      if (response.statusCode == 201) {
+      if (response.statusCode == 201 || response.statusCode == 200) {
         // Success
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Thank you! Your feedback has been received.'),
+            content: Row(
+              children: [
+                Icon(LucideIcons.checkCircle, color: Colors.white, size: 20),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text('Thank you! Your feedback has been received.'),
+                ),
+              ],
+            ),
             backgroundColor: AppTheme.success,
             duration: Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
           ),
         );
         Navigator.pop(context);
       } else {
-        // Error
-        final error = json.decode(response.body);
-        throw Exception(error['message'] ?? 'Failed to submit feedback');
+        // Handle error response
+        final errorMessage = ApiErrorHandler.getUserFriendlyMessage(null, response: response);
+        ApiErrorHandler.logError('submitFeedback', 'HTTP ${response.statusCode}', response: response);
+        _showErrorMessage(errorMessage);
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       if (!mounted) return;
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString()}'),
-          backgroundColor: AppTheme.danger,
-          duration: const Duration(seconds: 4),
-        ),
-      );
+      // Log error for debugging
+      ApiErrorHandler.logError('submitFeedback', e, response: response, stackTrace: stackTrace);
+      
+      // Get user-friendly error message
+      final errorMessage = ApiErrorHandler.getUserFriendlyMessage(e, response: response);
+      _showErrorMessage(errorMessage);
     } finally {
       if (mounted) {
         setState(() {
@@ -178,6 +196,36 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
         });
       }
     }
+  }
+
+  void _showErrorMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(
+              LucideIcons.alertCircle,
+              color: Colors.white,
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(message),
+            ),
+          ],
+        ),
+        backgroundColor: AppTheme.danger,
+        duration: const Duration(seconds: 4),
+        behavior: SnackBarBehavior.floating,
+        action: SnackBarAction(
+          label: 'Dismiss',
+          textColor: Colors.white70,
+          onPressed: () {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          },
+        ),
+      ),
+    );
   }
 
   @override

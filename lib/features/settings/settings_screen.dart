@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../../core/theme.dart';
 import '../../core/state/app_state_provider.dart';
 import 'feedback_screen.dart';
@@ -14,6 +15,26 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   double _simulatedCacheSize = 1.4;
+  String _appVersion = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAppVersion();
+  }
+
+  Future<void> _loadAppVersion() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      setState(() {
+        _appVersion = packageInfo.version;
+      });
+    } catch (e) {
+      setState(() {
+        _appVersion = '1.0.0'; // Fallback version
+      });
+    }
+  }
 
   void _clearCache() {
     setState(() {
@@ -188,7 +209,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                   subtitle: Text(
-                    'Version 1.0.0',
+                    _appVersion.isEmpty ? 'Loading...' : 'Version $_appVersion',
                     style: TextStyle(
                       color: AppTheme.getTextSecondary(isDark),
                       fontSize: 11,
@@ -204,7 +225,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         errorBuilder: (c, e, s) => const Icon(LucideIcons.scan, size: 48)
                       ),
                       applicationName: 'ZeScan Scanner',
-                      applicationVersion: '1.0.0',
+                      applicationVersion: _appVersion.isEmpty ? '1.0.0' : _appVersion,
                       children: const [
                         Text('A privacy-first document scanner and PDF toolkit. Scan documents without watermarks or accounts.'),
                       ],
@@ -372,7 +393,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           '• Secure document processing\n'
           '• PDF merge, compress & split\n'
           '• Professional document scanning\n'
-          '• Completely free!\n\n'
+          '• Manage and edit PDF pages\n'
+          '• All features completely free!\n\n'
           'Download: https://play.google.com/store/apps/details?id=com.zeppelinlabs.digital.zescan';
       
       await Share.share(

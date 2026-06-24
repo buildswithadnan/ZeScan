@@ -11,9 +11,9 @@ class PermissionService {
     return _requestPermission(
       context,
       Permission.camera,
-      title: 'Camera Access Required',
+      title: 'Camera Permission',
       rationale:
-          'ZeScan needs camera access to scan documents. All processing stays 100% on your device.',
+          'ZeScan needs camera access to scan and capture documents. This allows you to take photos of papers, receipts, and other documents.',
       icon: Icons.camera_alt_outlined,
     );
   }
@@ -30,9 +30,9 @@ class PermissionService {
     return _requestPermission(
       context,
       permission,
-      title: 'Photo Library Access',
+      title: 'Photo Library Permission',
       rationale:
-          'ZeScan needs access to your photos to import images for PDF conversion. Your privacy is protected.',
+          'ZeScan needs access to your photo library to import images and convert them to PDF documents. You can select which photos to use.',
       icon: Icons.photo_library_outlined,
     );
   }
@@ -127,12 +127,12 @@ class PermissionService {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         icon: Icon(Icons.settings_outlined, size: 40, color: Theme.of(context).colorScheme.error),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-        content: Text(
-          'Permission was denied permanently. Please enable it in your device Settings to continue.',
+        content: const Text(
+          'This permission was previously denied. To use this feature, please enable it in your device Settings.\n\nSettings → Apps → ZeScan → Permissions',
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
             fontSize: 14,
+            height: 1.4,
           ),
         ),
         actionsAlignment: MainAxisAlignment.center,

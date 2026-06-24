@@ -8,7 +8,7 @@ import 'package:image/image.dart' as img;
 class DocumentScannerService {
   static DocumentScanner? _scanner;
 
-  /// Initialize the ML Kit Document Scanner
+  /// Initialize the ML Kit Document Scanner with manual mode
   static DocumentScanner _getScanner() {
     if (_scanner != null) return _scanner!;
 
@@ -16,6 +16,7 @@ class DocumentScannerService {
       options: DocumentScannerOptions(
         pageLimit: 10,
         isGalleryImport: true,
+        mode: ScannerMode.full,  // Full manual mode with crop controls
       ),
     );
     return _scanner!;
@@ -23,6 +24,7 @@ class DocumentScannerService {
 
   /// Scan document using ML Kit's built-in scanner with edge detection and cropping
   /// Returns list of cropped and processed image paths
+  /// Throws exception with user-friendly message on failure
   static Future<List<String>> scanDocumentWithMLKit() async {
     try {
       final scanner = _getScanner();
@@ -43,20 +45,87 @@ class DocumentScannerService {
       }
 
       return processedPaths;
+    } on Exception catch (e) {
+      final errorMsg = e.toString();
+      debugPrint('DocumentScannerService: ML Kit scan failed: $errorMsg');
+      
+      // Throw user-friendly error messages
+      if (errorMsg.contains('ActivityNotFoundException') || 
+          errorMsg.contains('not available')) {
+        throw Exception('ML Kit scanner is not available on this device');
+      } else if (errorMsg.contains('Permission')) {
+        throw Exception('Camera permission is required');
+      } else if (errorMsg.contains('cancelled') || errorMsg.contains('canceled')) {
+        return []; // User cancelled, return empty list
+      } else {
+        throw Exception('Scanner failed to start');
+      }
     } catch (e) {
-      debugPrint('DocumentScannerService: ML Kit scan failed: $e');
-      return [];
+      debugPrint('DocumentScannerService: Unexpected error: $e');
+      throw Exception('Unable to scan document');
+    }
+  }
+
+  /// Scan document from gallery using ML Kit with gallery import enabled
+  /// This provides the same edge detection and enhancement as camera scanning
+  /// Returns list of cropped and processed image paths
+  static Future<List<String>> scanDocumentFromGallery() async {
+    try {
+      // Create scanner with gallery import enabled and MANUAL mode
+      final scanner = DocumentScanner(
+        options: DocumentScannerOptions(
+          pageLimit: 50,
+          isGalleryImport: true,  // Enable gallery import
+          mode: ScannerMode.full,  // Full mode with manual controls
+        ),
+      );
+
+      final DocumentScanningResult result = await scanner.scanDocument();
+
+      final List<String> processedPaths = [];
+      
+      // Get images from scan result - these are already cropped and enhanced by ML Kit
+      if (result.images != null && result.images!.isNotEmpty) {
+        for (var imagePath in result.images!) {
+          processedPaths.add(imagePath);
+          debugPrint('DocumentScannerService: Gallery import processed: $imagePath');
+        }
+      }
+
+      // Clean up
+      scanner.close();
+
+      return processedPaths;
+    } on Exception catch (e) {
+      final errorMsg = e.toString();
+      debugPrint('DocumentScannerService: Gallery import failed: $errorMsg');
+      
+      // Throw user-friendly error messages
+      if (errorMsg.contains('ActivityNotFoundException') || 
+          errorMsg.contains('not available')) {
+        throw Exception('ML Kit scanner is not available on this device');
+      } else if (errorMsg.contains('Permission')) {
+        throw Exception('Photo library access is required');
+      } else if (errorMsg.contains('cancelled') || errorMsg.contains('canceled')) {
+        return []; // User cancelled, return empty list
+      } else {
+        throw Exception('Unable to import images');
+      }
+    } catch (e) {
+      debugPrint('DocumentScannerService: Unexpected gallery import error: $e');
+      throw Exception('Unable to import images');
     }
   }
 
   /// Process a single image file with ML Kit edge detection and perspective correction
   /// Uses ML Kit Document Scanner for automatic cropping
+  /// Returns processed image path, or original path if processing fails
   static Future<String?> processImageWithEdgeDetection(String inputPath) async {
     try {
       final File inputFile = File(inputPath);
       if (!await inputFile.exists()) {
         debugPrint('DocumentScannerService: Input file does not exist');
-        return null;
+        throw Exception('Image file not found');
       }
 
       // Read the image
@@ -65,7 +134,7 @@ class DocumentScannerService {
 
       if (originalImage == null) {
         debugPrint('DocumentScannerService: Failed to decode image');
-        return inputPath; // Return original if processing fails
+        throw Exception('Unable to process image format');
       }
 
       // Try edge detection with lower threshold for better results
@@ -108,9 +177,13 @@ class DocumentScannerService {
 
       debugPrint('DocumentScannerService: Image processed and saved to $outputPath (cropped: $didCrop)');
       return outputPath;
-    } catch (e) {
+    } on Exception catch (e) {
       debugPrint('DocumentScannerService: Image processing failed: $e');
-      return inputPath; // Return original on error
+      // Return original on processing error
+      return inputPath;
+    } catch (e) {
+      debugPrint('DocumentScannerService: Unexpected error during processing: $e');
+      return inputPath;
     }
   }
 
@@ -249,27 +322,147 @@ class DocumentScannerService {
     }
   }
 
-  /// Enhance document image (brightness, contrast, sharpness)
+  /// Enhance document image with multiple filter options
+  /// Applies perspective correction, brightness/contrast adjustment, and document-specific filters
   static img.Image _enhanceDocument(img.Image image) {
     try {
       // Clone the image to avoid modifying original
       img.Image enhanced = image.clone();
 
-      // Very subtle enhancement to avoid inversion (minimal adjustment)
+      // Step 1: Auto-level to improve contrast (like document scanner apps)
+      enhanced = _autoLevel(enhanced);
+
+      // Step 2: Increase contrast and brightness for document readability
       enhanced = img.adjustColor(
         enhanced,
-        contrast: 1.05, // Very light contrast boost
-        brightness: 1.0, // No brightness change
-        saturation: 1.0, // Keep original saturation
+        contrast: 1.25,      // Stronger contrast for text clarity
+        brightness: 1.08,     // Slight brightness boost
+        saturation: 0.95,     // Slightly desaturate for document look
       );
 
-      // Skip sharpening to avoid artifacts that could cause inversion
-      // The light contrast boost is sufficient for most documents
+      // Step 3: Apply slight sharpening for text clarity
+      enhanced = img.convolution(
+        enhanced,
+        filter: [
+          0, -1,  0,
+         -1,  5, -1,
+          0, -1,  0,
+        ],
+        div: 1,
+      );
+
+      // Step 4: Optional: Apply document-style color correction
+      // Boost whites and darken text
+      enhanced = _enhanceDocumentColors(enhanced);
 
       return enhanced;
     } catch (e) {
       debugPrint('DocumentScannerService: Enhancement failed, returning original: $e');
       return image; // Return original if enhancement fails
+    }
+  }
+
+  /// Auto-level the image histogram for better contrast
+  static img.Image _autoLevel(img.Image image) {
+    try {
+      // Calculate histogram
+      final List<int> histogram = List.filled(256, 0);
+      
+      for (int y = 0; y < image.height; y++) {
+        for (int x = 0; x < image.width; x++) {
+          final pixel = image.getPixel(x, y);
+          final brightness = ((pixel.r + pixel.g + pixel.b) / 3).round();
+          histogram[brightness.clamp(0, 255)]++;
+        }
+      }
+
+      // Find min and max values (ignore extreme 2% on each end)
+      final totalPixels = image.width * image.height;
+      final threshold = (totalPixels * 0.02).round();
+      
+      int minValue = 0;
+      int maxValue = 255;
+      int count = 0;
+      
+      for (int i = 0; i < 256; i++) {
+        count += histogram[i];
+        if (count > threshold) {
+          minValue = i;
+          break;
+        }
+      }
+      
+      count = 0;
+      for (int i = 255; i >= 0; i--) {
+        count += histogram[i];
+        if (count > threshold) {
+          maxValue = i;
+          break;
+        }
+      }
+
+      // Apply level adjustment
+      if (maxValue > minValue) {
+        final scale = 255.0 / (maxValue - minValue);
+        
+        for (int y = 0; y < image.height; y++) {
+          for (int x = 0; x < image.width; x++) {
+            final pixel = image.getPixel(x, y);
+            
+            final r = ((pixel.r - minValue) * scale).clamp(0, 255).round();
+            final g = ((pixel.g - minValue) * scale).clamp(0, 255).round();
+            final b = ((pixel.b - minValue) * scale).clamp(0, 255).round();
+            
+            image.setPixel(x, y, img.ColorRgb8(r, g, b));
+          }
+        }
+      }
+
+      return image;
+    } catch (e) {
+      debugPrint('DocumentScannerService: Auto-level failed: $e');
+      return image;
+    }
+  }
+
+  /// Enhance document colors - boost whites and darken text
+  static img.Image _enhanceDocumentColors(img.Image image) {
+    try {
+      for (int y = 0; y < image.height; y++) {
+        for (int x = 0; x < image.width; x++) {
+          final pixel = image.getPixel(x, y);
+          
+          final brightness = (pixel.r + pixel.g + pixel.b) / 3;
+          
+          int r, g, b;
+          
+          if (brightness > 180) {
+            // Boost bright areas (paper/background) to white
+            final boost = 1.15;
+            r = (pixel.r * boost).clamp(0, 255).round();
+            g = (pixel.g * boost).clamp(0, 255).round();
+            b = (pixel.b * boost).clamp(0, 255).round();
+          } else if (brightness < 100) {
+            // Darken dark areas (text) slightly
+            final darken = 0.90;
+            r = (pixel.r * darken).clamp(0, 255).round();
+            g = (pixel.g * darken).clamp(0, 255).round();
+            b = (pixel.b * darken).clamp(0, 255).round();
+          } else {
+            // Keep mid-tones as-is
+            r = pixel.r.toInt();
+            g = pixel.g.toInt();
+            b = pixel.b.toInt();
+          }
+          
+          image.setPixel(x, y, img.ColorRgb8(r, g, b));
+        }
+      }
+      
+      return image;
+    } catch (e) {
+      debugPrint('DocumentScannerService: Color enhancement failed: $e');
+      return image;
     }
   }
 

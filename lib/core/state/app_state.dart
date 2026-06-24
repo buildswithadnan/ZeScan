@@ -19,6 +19,10 @@ class AppState extends ChangeNotifier {
   bool _isInitialized = false;
   bool get isInitialized => _isInitialized;
 
+  // Auto-enhance gallery imports with ML Kit
+  bool _autoEnhanceGalleryImports = false;
+  bool get autoEnhanceGalleryImports => _autoEnhanceGalleryImports;
+
   // Settings & Pro State
   bool _isProUnlocked = false;
   bool get isProUnlocked => _isProUnlocked;
@@ -34,6 +38,8 @@ class AppState extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       _isDarkMode = prefs.getBool('is_dark_mode') ?? true;
       _isOnboardingCompleted = prefs.getBool('onboarding_completed') ?? false;
+      
+      debugPrint('AppState: Preferences loaded - darkMode: $_isDarkMode, onboardingCompleted: $_isOnboardingCompleted');
       
       // Load saved documents
       await _loadDocuments();
@@ -93,8 +99,13 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('onboarding_completed', true);
-    } catch (_) {}
+      final success = await prefs.setBool('onboarding_completed', true);
+      debugPrint('AppState: Onboarding marked as completed (success: $success)');
+      // Force commit to disk
+      await prefs.reload();
+    } catch (e) {
+      debugPrint('AppState: Failed to save onboarding status: $e');
+    }
   }
 
   void toggleProStatus() {
@@ -244,6 +255,11 @@ class AppState extends ChangeNotifier {
 
   // Scanner Flow Operations
   void startNewScan() {
+    _scanQueue.clear();
+    notifyListeners();
+  }
+
+  void clearScanQueue() {
     _scanQueue.clear();
     notifyListeners();
   }

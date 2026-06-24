@@ -1,7 +1,34 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 
+        PERMISSIONS REQUIRED BY ZESCAN:
+        
+        1. CAMERA
+           - Purpose: To scan documents using the device camera
+           - When used: When user taps "Start Scanning" or uses ML Kit scanner
+           - Required: Yes (core feature)
+        
+        2. READ_EXTERNAL_STORAGE (Android 12 and below)
+           - Purpose: To access and import images from gallery
+           - When used: When user taps "Import from Gallery"
+           - Required: Optional (only for gallery import feature)
+           - Note: Only used on Android 12 (API 32) and below
+        
+        3. READ_MEDIA_IMAGES (Android 13+)
+           - Purpose: To access and import images from photo library
+           - When used: When user taps "Import from Gallery"
+           - Required: Optional (only for gallery import feature)
+           - Note: Replaces READ_EXTERNAL_STORAGE on Android 13+ (API 33+)
+        
+        INTERNET (automatically granted):
+           - Purpose: For feedback/bug report submission
+           - When used: When user submits feedback from settings
+           - Required: Optional (only for feedback feature)
+    -->
+    
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+    
     <application
         android:label="ZeScan"
         android:name="${applicationName}"
