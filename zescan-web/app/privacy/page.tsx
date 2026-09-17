@@ -18,6 +18,7 @@ export default function PrivacyPage() {
                   src="/images/dark_mode_icon.png"
                   alt="ZeScan Logo" 
                   fill
+                  sizes="40px"
                   className="object-contain"
                 />
               </div>
@@ -61,7 +62,7 @@ export default function PrivacyPage() {
             <p className="text-xl text-gray-400">
               Your privacy is our top priority. Learn how ZeScan protects your data.
             </p>
-            <p className="text-sm text-gray-500 mt-4">Last updated: June 6, 2024</p>
+            <p className="text-sm text-gray-500 mt-4">Last updated: September 18, 2026</p>
           </motion.div>
 
           {/* Privacy Highlights */}
@@ -196,6 +197,7 @@ export default function PrivacyPage() {
                 src="/images/dark_mode_icon.png"
                 alt="ZeScan Logo" 
                 fill
+                sizes="32px"
                 className="object-contain"
               />
             </div>
@@ -206,7 +208,7 @@ export default function PrivacyPage() {
             <Link href="/features" className="hover:text-blue-400 transition">Features</Link>
             <Link href="/privacy" className="hover:text-blue-400 transition">Privacy Policy</Link>
           </div>
-          <p className="text-sm">© 2024 ZeScan. All rights reserved.</p>
+          <p className="text-sm">© 2026 ZeScan. All rights reserved.</p>
         </div>
       </footer>
     </div>

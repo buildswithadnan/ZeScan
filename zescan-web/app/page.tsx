@@ -93,6 +93,7 @@ export default function LandingPage() {
                   src="/images/dark_mode_icon.png"
                   alt="ZeScan Logo" 
                   fill
+                  sizes="40px"
                   className="object-contain"
                 />
               </div>
@@ -106,7 +107,7 @@ export default function LandingPage() {
               <a href="#features" className="hover:text-blue-400 transition">Features</a>
               <a href="#tools" className="hover:text-blue-400 transition">PDF Tools</a>
               <a href="#download" className="hover:text-blue-400 transition">Download</a>
-              <Link href="/contact" className="hover:text-blue-400 transition">Contact</Link>
+              <Link href="/contact" className="hover:text-blue-400 transition">Feedback</Link>
               <a 
                 href="https://play.google.com/store/apps/details?id=com.zeppelinlabs.digital.zescan"
                 target="_blank"
@@ -139,7 +140,7 @@ export default function LandingPage() {
               <a href="#features" className="block hover:text-blue-400" onClick={() => setMobileMenuOpen(false)}>Features</a>
               <a href="#tools" className="block hover:text-blue-400" onClick={() => setMobileMenuOpen(false)}>PDF Tools</a>
               <a href="#download" className="block hover:text-blue-400" onClick={() => setMobileMenuOpen(false)}>Download</a>
-              <Link href="/contact" className="block hover:text-blue-400" onClick={() => setMobileMenuOpen(false)}>Contact</Link>
+              <Link href="/contact" className="block hover:text-blue-400" onClick={() => setMobileMenuOpen(false)}>Feedback</Link>
             </div>
           </motion.div>
         )}
@@ -212,22 +213,63 @@ export default function LandingPage() {
                 ))}
               </div>
 
-              {/* App Preview */}
+              {/* App Screenshots Gallery */}
               <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.3, duration: 0.6 }}
-                className="relative mx-auto max-w-sm md:max-w-md"
+                className="relative mx-auto max-w-6xl"
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-blue-600 rounded-3xl blur-3xl opacity-20"></div>
-                <div className="relative bg-gradient-to-b from-gray-800 to-gray-900 rounded-3xl p-4 border border-gray-700 shadow-2xl">
-                  <div className="relative w-full aspect-[9/16] rounded-2xl overflow-hidden bg-gray-900">
-                    <Image 
-                      src="/images/splash_icon.png"
-                      alt="ZeScan App Preview" 
-                      fill
-                      className="object-contain p-8"
-                    />
+                <div className="grid md:grid-cols-3 gap-8">
+                  {/* Scanner Screenshot */}
+                  <div className="relative group">
+                    <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-blue-600 rounded-3xl blur-2xl opacity-20 group-hover:opacity-30 transition"></div>
+                    <div className="relative bg-gradient-to-b from-gray-800 to-gray-900 rounded-3xl p-3 border border-gray-700 shadow-2xl">
+                      <div className="relative w-full aspect-[9/16] rounded-2xl overflow-hidden bg-gray-900">
+                        <Image 
+                          src="/screenhots/scanner.webp"
+                          alt="ZeScan Document Scanner" 
+                          fill
+                          sizes="(max-width: 768px) 100vw, 33vw"
+                          className="object-cover"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-center mt-4 text-sm text-gray-400">Smart Document Scanning</p>
+                  </div>
+
+                  {/* PDF Toolkit Screenshot */}
+                  <div className="relative group">
+                    <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-blue-600 rounded-3xl blur-2xl opacity-20 group-hover:opacity-30 transition"></div>
+                    <div className="relative bg-gradient-to-b from-gray-800 to-gray-900 rounded-3xl p-3 border border-gray-700 shadow-2xl">
+                      <div className="relative w-full aspect-[9/16] rounded-2xl overflow-hidden bg-gray-900">
+                        <Image 
+                          src="/screenhots/tools.webp"
+                          alt="ZeScan PDF Toolkit" 
+                          fill
+                          sizes="(max-width: 768px) 100vw, 33vw"
+                          className="object-cover"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-center mt-4 text-sm text-gray-400">PDF Toolkit</p>
+                  </div>
+
+                  {/* Settings & Privacy Screenshot */}
+                  <div className="relative group">
+                    <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-blue-600 rounded-3xl blur-2xl opacity-20 group-hover:opacity-30 transition"></div>
+                    <div className="relative bg-gradient-to-b from-gray-800 to-gray-900 rounded-3xl p-3 border border-gray-700 shadow-2xl">
+                      <div className="relative w-full aspect-[9/16] rounded-2xl overflow-hidden bg-gray-900">
+                        <Image 
+                          src="/screenhots/settings-and-privacy.webp"
+                          alt="ZeScan Settings & Privacy" 
+                          fill
+                          sizes="(max-width: 768px) 100vw, 33vw"
+                          className="object-cover"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-center mt-4 text-sm text-gray-400">Settings & Privacy</p>
                   </div>
                 </div>
               </motion.div>
@@ -381,6 +423,7 @@ export default function LandingPage() {
                     src="/images/dark_mode_icon.png"
                     alt="ZeScan Logo" 
                     fill
+                    sizes="32px"
                     className="object-contain"
                   />
                 </div>
@@ -396,10 +439,20 @@ export default function LandingPage() {
             <div>
               <h3 className="font-bold mb-4">Company</h3>
               <ul className="space-y-2 text-sm text-gray-400">
+                <li>
+                  <a 
+                    href="https://zeppelinlabs.digital" 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="hover:text-blue-400 transition"
+                  >
+                    Zeppelin Labs
+                  </a>
+                </li>
                 <li><a href="#features" className="hover:text-blue-400 transition">Features</a></li>
                 <li><a href="#tools" className="hover:text-blue-400 transition">PDF Tools</a></li>
                 <li><Link href="/privacy" className="hover:text-blue-400 transition">Privacy Policy</Link></li>
-                <li><Link href="/contact" className="hover:text-blue-400 transition">Contact Us</Link></li>
+                <li><Link href="/contact" className="hover:text-blue-400 transition">Feedback</Link></li>
               </ul>
             </div>
             
@@ -424,7 +477,15 @@ export default function LandingPage() {
           
           <div className="text-center pt-8 border-t border-gray-800">
             <p className="text-sm text-gray-400">
-              © 2024 ZeScan. All rights reserved.
+              © 2026 ZeScan. All rights reserved. | Developed by{' '}
+              <a 
+                href="https://zeppelinlabs.digital" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-300 transition"
+              >
+                Zeppelin Labs
+              </a>
             </p>
           </div>
         </div>

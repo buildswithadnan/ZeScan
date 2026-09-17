@@ -109,6 +109,7 @@ export default function FeaturesPage() {
                   src="/images/dark_mode_icon.png"
                   alt="ZeScan Logo" 
                   fill
+                  sizes="40px"
                   className="object-contain"
                 />
               </div>
@@ -229,6 +230,7 @@ export default function FeaturesPage() {
                 src="/images/dark_mode_icon.png"
                 alt="ZeScan Logo" 
                 fill
+                sizes="32px"
                 className="object-contain"
               />
             </div>
@@ -239,7 +241,7 @@ export default function FeaturesPage() {
             <Link href="/features" className="hover:text-blue-400 transition">Features</Link>
             <Link href="/privacy" className="hover:text-blue-400 transition">Privacy Policy</Link>
           </div>
-          <p className="text-sm">© 2024 ZeScan. All rights reserved.</p>
+          <p className="text-sm">© 2026 ZeScan. All rights reserved.</p>
         </div>
       </footer>
     </div>

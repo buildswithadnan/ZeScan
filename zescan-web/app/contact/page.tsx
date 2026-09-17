@@ -5,11 +5,14 @@ import { motion } from 'framer-motion';
 import { MessageSquare, Lightbulb, Bug, Send, CheckCircle, Loader2 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
+import PhoneInput from 'react-phone-number-input';
+import 'react-phone-number-input/style.css';
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
     type: 'feedback' as 'feedback' | 'feature_request' | 'bug_report',
     email: '',
+    phone: '',
     subject: '',
     message: '',
     appVersion: '',
@@ -64,6 +67,7 @@ export default function ContactPage() {
         setFormData({
           type: 'feedback',
           email: '',
+          phone: '',
           subject: '',
           message: '',
           appVersion: '',
@@ -94,6 +98,7 @@ export default function ContactPage() {
                   src="/images/dark_mode_icon.png"
                   alt="ZeScan Logo" 
                   fill
+                  sizes="40px"
                   className="object-contain"
                 />
               </div>
@@ -106,7 +111,7 @@ export default function ContactPage() {
               <Link href="/" className="hover:text-blue-400 transition">Home</Link>
               <Link href="/features" className="hover:text-blue-400 transition">Features</Link>
               <Link href="/privacy" className="hover:text-blue-400 transition">Privacy</Link>
-              <Link href="/contact" className="text-blue-400">Contact</Link>
+              <Link href="/contact" className="text-blue-400">Feedback</Link>
             </div>
           </div>
         </div>
@@ -185,20 +190,39 @@ export default function ContactPage() {
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Email <span className="text-gray-500">(optional)</span>
-                  </label>
-                  <input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="your@email.com"
-                    className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-blue-500 transition"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Provide your email if you'd like us to respond
-                  </p>
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      placeholder="your@email.com"
+                      className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-blue-500 transition"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Provide your email if you'd like us to respond
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Phone Number
+                    </label>
+                    <PhoneInput
+                      international
+                      defaultCountry="PK"
+                      value={formData.phone}
+                      onChange={(value) => setFormData({ ...formData, phone: value || '' })}
+                      placeholder="+92 300 1234567"
+                      className="phone-input-custom"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Optional contact number
+                    </p>
+                  </div>
                 </div>
 
                 <div>
@@ -235,7 +259,7 @@ export default function ContactPage() {
                 <div className="grid md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium mb-2">
-                      App Version <span className="text-gray-500">(optional)</span>
+                      App Version
                     </label>
                     <input
                       type="text"
@@ -248,7 +272,7 @@ export default function ContactPage() {
 
                   <div>
                     <label className="block text-sm font-medium mb-2">
-                      Device Info <span className="text-gray-500">(optional)</span>
+                      Device Info
                     </label>
                     <input
                       type="text"
@@ -298,6 +322,7 @@ export default function ContactPage() {
                 src="/images/dark_mode_icon.png"
                 alt="ZeScan Logo" 
                 fill
+                sizes="32px"
                 className="object-contain"
               />
             </div>
@@ -307,9 +332,9 @@ export default function ContactPage() {
             <Link href="/" className="hover:text-blue-400 transition">Home</Link>
             <Link href="/features" className="hover:text-blue-400 transition">Features</Link>
             <Link href="/privacy" className="hover:text-blue-400 transition">Privacy Policy</Link>
-            <Link href="/contact" className="hover:text-blue-400 transition">Contact</Link>
+            <Link href="/contact" className="hover:text-blue-400 transition">Feedback</Link>
           </div>
-          <p className="text-sm">© 2024 ZeScan. All rights reserved.</p>
+          <p className="text-sm">© 2026 ZeScan. All rights reserved.</p>
         </div>
       </footer>
     </div>

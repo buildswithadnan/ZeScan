@@ -6,6 +6,7 @@ import { sendFeedbackEmail } from '@/lib/emailService';
 const feedbackSchema = z.object({
   type: z.enum(['feedback', 'feature_request', 'bug_report']),
   email: z.string().email().optional().or(z.literal('')),
+  phone: z.string().optional().or(z.literal('')),
   subject: z.string().min(3).max(200),
   message: z.string().min(10).max(2000),
   appVersion: z.string().optional(),
@@ -33,12 +34,21 @@ export async function POST(request: NextRequest) {
       userAgent: request.headers.get('user-agent') || 'unknown',
     };
 
-    // Log feedback
-    console.log('📝 New feedback received:', {
-      id: feedback.id,
-      type: feedback.type,
-      subject: feedback.subject,
-    });
+    // Log feedback to console (you can view this in Vercel logs)
+    console.log('='.repeat(80));
+    console.log('📝 NEW FEEDBACK RECEIVED');
+    console.log('='.repeat(80));
+    console.log('ID:', feedback.id);
+    console.log('Type:', feedback.type.toUpperCase());
+    console.log('Subject:', feedback.subject);
+    console.log('Message:', feedback.message);
+    console.log('Email:', feedback.email || 'Not provided');
+    console.log('Phone:', feedback.phone || 'Not provided');
+    console.log('App Version:', feedback.appVersion || 'Not provided');
+    console.log('Device:', feedback.deviceInfo || 'Not provided');
+    console.log('Timestamp:', feedback.timestamp);
+    console.log('IP:', feedback.ipAddress);
+    console.log('='.repeat(80));
 
     // Send email notification
     try {
@@ -52,8 +62,9 @@ export async function POST(request: NextRequest) {
       // Continue even if email fails - don't block the user
     }
 
-    // TODO: Save to database (Firestore, MongoDB, etc.)
-    // await saveFeedbackToDatabase(feedback);
+    // TODO: Save to database (Firestore, MongoDB, Supabase, etc.)
+    // For now, feedback is logged to Vercel deployment logs
+    // You can view these in: Vercel Dashboard → Deployments → Functions → Logs
 
     return NextResponse.json(
       {
@@ -94,6 +105,7 @@ export async function GET() {
       expectedFields: {
         type: 'feedback | feature_request | bug_report',
         email: 'string (optional)',
+        phone: 'string (optional)',
         subject: 'string (3-200 chars)',
         message: 'string (10-2000 chars)',
         appVersion: 'string (optional)',

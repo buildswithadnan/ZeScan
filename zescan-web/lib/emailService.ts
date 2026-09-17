@@ -3,6 +3,7 @@ import nodemailer from 'nodemailer';
 interface FeedbackEmailData {
   type: 'feedback' | 'feature_request' | 'bug_report';
   email?: string;
+  phone?: string;
   subject: string;
   message: string;
   appVersion?: string;
@@ -118,6 +119,13 @@ export async function sendFeedbackEmail(data: FeedbackEmailData): Promise<void> 
           <div class="field">
             <div class="label">User Email:</div>
             <div class="value"><a href="mailto:${data.email}">${data.email}</a></div>
+          </div>
+          ` : ''}
+
+          ${data.phone ? `
+          <div class="field">
+            <div class="label">Phone Number:</div>
+            <div class="value"><a href="tel:${data.phone}">${data.phone}</a></div>
           </div>
           ` : ''}
 
